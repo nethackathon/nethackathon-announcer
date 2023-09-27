@@ -7,19 +7,24 @@ import requests.exceptions
 import time
 
 
-CLIENT_ID_ENV = "TWITCH_CLIENT_ID"
-CLIENT_SECRET_ENV = "TWITCH_CLIENT_SECRET"
+TWITCH_CLIENT_ID_ENV = "TWITCH_CLIENT_ID"
+TWITCH_CLIENT_SECRET_ENV = "TWITCH_CLIENT_SECRET"
 NETHACK_TWITCH_GAME_ID = 130
 #NETHACK_TWITCH_GAME_ID = 516575 # valorant for testing
 # get again with this:
 #   response = twitch.get("https://api.twitch.tv/helix/games?name=nethack&name=nethack-1987")
+
+DISCORD_CLIENT_ID_ENV = "DISCORD_CLIENT_ID"
+DISCORD_CLIENT_SECRET_ENV = "DISCORD_CLIENT_SECRET"
+DISCORD_PERMISSIONS=18432
+
 POLL_TIME = 10
 ERROR_RETRY_TIME = 120
 
 
 def twitch_session():
-    client_id = os.environ[CLIENT_ID_ENV]
-    client_secret = os.environ[CLIENT_SECRET_ENV]
+    client_id = os.environ[TWITCH_CLIENT_ID_ENV]
+    client_secret = os.environ[TWITCH_CLIENT_SECRET_ENV]
     data = {
         "client_id": client_id,
         "client_secret": client_secret,
@@ -39,22 +44,46 @@ def twitch_session():
     return session
 
 
-def announce(stream):
+def discord_session():
+    client_id = os.environ[DISCORD_CLIENT_ID_ENV]
+    client_secret = os.environ[DISCORD_CLIENT_SECRET_ENV]
+    data = {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "grant_type": "client_credentials",
+        "scope": "identify",
+    }
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    response = requests.post(
+        "https://discord.com/api/v10/oauth2/token", data=data, headers=headers, auth=(client_id, client_secret))
+    response.raise_for_status()
+
+    token = response.json()['access_token']
+
+    session = requests.Session()
+    session.headers = {
+        "Authorization": f"Bearer {token}",
+        "Client-Id": client_id,
+    }
+
+    return session
+
+
+def announce(stream, discord):
     message = f"{stream['user_name']} is streaming Nethack!"
     link = "https://twitch.tv/{stream['user_login']}"
 
-    announce_log(message, link)
-
-
-def announce_log(message, link):
     logging.info(message)
+    # TODO post discord message
 
 
 def main():
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting")
+
     announced_streamers = set()
     twitch = twitch_session()
+    discord = discord_session()
     
     while True:
         try:
@@ -75,9 +104,16 @@ def main():
         current_streamers = set()
         for stream in response.json()["data"]:
             stream_key = (stream["user_login"], stream["started_at"])
-            current_streamers.add(stream_key)
             if stream_key not in announced_streamers:
-                announce(stream)
+                try:
+                    announce(stream, discord)
+                    current_streamers.add(stream_key)
+                except requests.exceptions.HTTPError as e:
+                    logging.exception(e)
+                    if e.status in {401, 403}:
+                        discord = discord.session()  # too lazy to use refresh token timeout
+                except requests.exceptions.ConnectionError:
+                    logging.exception(e)
 
         announced_streamers = current_streamers
         time.sleep(POLL_TIME)
