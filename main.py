@@ -17,7 +17,7 @@ NETHACK_TWITCH_GAME_ID = 130
 TWITCH_QUERY = f"https://api.twitch.tv/helix/streams?game_id={NETHACK_TWITCH_GAME_ID}&type=live"
 
 DISCORD_BOT_TOKEN_ENV = "DISCORD_BOT_TOKEN"
-DISCORD_CHANNEL = 1156444485442617464
+DISCORD_CHANNEL_ENV = "DISCORD_CHANNEL"
 
 POLL_TIME = 60
 
@@ -74,7 +74,7 @@ class DiscordClient(discord.Client):
         await asyncio.gather(self.wait_until_ready(), self.twitch_auth())
 
     async def announce(self, streams):
-        channel = self.get_channel(DISCORD_CHANNEL)
+        channel = self.get_channel(os.environ[DISCORD_CHANNEL_ENV])
         current_streams = set()
         for st in streams:
             stream_key = (st["user_login"], st["started_at"])
