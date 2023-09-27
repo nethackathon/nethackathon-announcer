@@ -74,7 +74,12 @@ class DiscordClient(discord.Client):
         await asyncio.gather(self.wait_until_ready(), self.twitch_auth())
 
     async def announce(self, streams):
-        channel = self.get_channel(os.environ[DISCORD_CHANNEL_ENV])
+        channel_id = os.environ[DISCORD_CHANNEL_ENV]
+        channel = self.get_channel(channel_id)
+        if not channel:
+            logging.error(f"Couldn't get discord channel {channel_id}")
+            return
+
         current_streams = set()
         for st in streams:
             stream_key = (st["user_login"], st["started_at"])
@@ -89,6 +94,7 @@ class DiscordClient(discord.Client):
                 await channel.send(f"{message}\n{link}")
             except Exception as e:
                 logging.exception(e)
+                current_streams.remove(stream_key)
 
         self.announced_streams = current_streams
 
