@@ -11,7 +11,7 @@ import os
 TWITCH_CLIENT_ID_ENV = "TWITCH_CLIENT_ID"
 TWITCH_CLIENT_SECRET_ENV = "TWITCH_CLIENT_SECRET"
 NETHACK_TWITCH_GAME_ID = 130
-NETHACK_TWITCH_GAME_ID = 516575 # valorant for testing
+#NETHACK_TWITCH_GAME_ID = 516575 # valorant for testing
 # get again with this:
 #   response = twitch.get("https://api.twitch.tv/helix/games?name=nethack&name=nethack-1987")
 TWITCH_QUERY = f"https://api.twitch.tv/helix/streams?game_id={NETHACK_TWITCH_GAME_ID}&type=live"
@@ -53,6 +53,7 @@ class DiscordClient(discord.Client):
                     logging.info("Successfully logged in to twitch")
                 else:
                     logging.error(f"Could not log in to twitch, http status {response.status}")
+                    self.twitch_request_headers = dict()
 
     @discord.ext.tasks.loop(seconds=POLL_TIME)
     async def poll_twitch(self):
@@ -62,6 +63,11 @@ class DiscordClient(discord.Client):
                 if 200 <= response.status <= 299:
                     js = await response.json()
                     await self.announce(js["data"])
+                elif response.status in {401, 403}:
+                    logging.error(f"Got {response.status} from twitch, redoing auth")
+                    await self.twitch_auth()
+                else:
+                    logging.error(f"Got {response.status} from twitch")
 
     @poll_twitch.before_loop
     async def wait(self):
@@ -79,7 +85,10 @@ class DiscordClient(discord.Client):
             message = f"{st['user_name']} is streaming Nethack!"
             link = f"https://twitch.tv/{st['user_login']}"
             logging.info(message)
-            await channel.send(f"{message}\n{link}")
+            try:
+                await channel.send(f"{message}\n{link}")
+            except Exception as e:
+                logging.exception(e)
 
         self.announced_streams = current_streams
 
@@ -88,7 +97,8 @@ def main():
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting")
 
-    discord_client = DiscordClient(intents=discord.Intents.default())
+    intents = discord.Intents(guilds=True)
+    discord_client = DiscordClient(intents=intents)
     discord_client.run(os.environ[DISCORD_BOT_TOKEN_ENV])
 
 
