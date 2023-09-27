@@ -11,10 +11,10 @@ import os
 TWITCH_CLIENT_ID_ENV = "TWITCH_CLIENT_ID"
 TWITCH_CLIENT_SECRET_ENV = "TWITCH_CLIENT_SECRET"
 NETHACK_TWITCH_GAME_ID = 130
-TWITCH_QUERY = f"https://api.twitch.tv/helix/streams?game_id={NETHACK_TWITCH_GAME_ID}&type=live"
-#NETHACK_TWITCH_GAME_ID = 516575 # valorant for testing
+NETHACK_TWITCH_GAME_ID = 516575 # valorant for testing
 # get again with this:
 #   response = twitch.get("https://api.twitch.tv/helix/games?name=nethack&name=nethack-1987")
+TWITCH_QUERY = f"https://api.twitch.tv/helix/streams?game_id={NETHACK_TWITCH_GAME_ID}&type=live"
 
 DISCORD_BOT_TOKEN_ENV = "DISCORD_BOT_TOKEN"
 DISCORD_CHANNEL = 1156444485442617464
@@ -65,8 +65,8 @@ class DiscordClient(discord.Client):
     async def announce(self, streams):
         channel = self.get_channel(DISCORD_CHANNEL)
         for st in streams:
-            message = f"{stream['user_name']} is streaming Nethack!"
-            link = f"https://twitch.tv/{stream['user_login']}"
+            message = f"{st['user_name']} is streaming Nethack!"
+            link = f"https://twitch.tv/{st['user_login']}"
             logging.info(message)
             await channel.send(f"{message}\n{link}")
 
