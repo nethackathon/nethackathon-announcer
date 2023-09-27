@@ -19,7 +19,7 @@ TWITCH_QUERY = f"https://api.twitch.tv/helix/streams?game_id={NETHACK_TWITCH_GAM
 DISCORD_BOT_TOKEN_ENV = "DISCORD_BOT_TOKEN"
 DISCORD_CHANNEL_ENV = "DISCORD_CHANNEL"
 
-POLL_TIME = 60
+POLL_TIME = 120
 
 
 class DiscordClient(discord.Client):
