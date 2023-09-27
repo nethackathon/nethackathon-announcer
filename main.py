@@ -23,6 +23,11 @@ POLL_TIME = 60
 
 
 class DiscordClient(discord.Client):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.announced_streams = set()
+
     async def setup_hook(self):
         self.poll_twitch.start()
 
@@ -64,11 +69,19 @@ class DiscordClient(discord.Client):
 
     async def announce(self, streams):
         channel = self.get_channel(DISCORD_CHANNEL)
+        current_streams = set()
         for st in streams:
+            stream_key = (st["user_login"], st["started_at"])
+            current_streams.add(stream_key)
+            if stream_key in self.announced_streams:
+                continue
+
             message = f"{st['user_name']} is streaming Nethack!"
             link = f"https://twitch.tv/{st['user_login']}"
             logging.info(message)
             await channel.send(f"{message}\n{link}")
+
+        self.announced_streams = current_streams
 
 
 def main():
