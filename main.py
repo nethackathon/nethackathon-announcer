@@ -1,10 +1,12 @@
 #! /usr/bin/env python
 
+import asyncio
+import discord
+import discord.ext.tasks
 import logging
 import os
 import requests
 import requests.exceptions
-import time
 
 
 TWITCH_CLIENT_ID_ENV = "TWITCH_CLIENT_ID"
@@ -16,9 +18,11 @@ NETHACK_TWITCH_GAME_ID = 130
 
 DISCORD_CLIENT_ID_ENV = "DISCORD_CLIENT_ID"
 DISCORD_CLIENT_SECRET_ENV = "DISCORD_CLIENT_SECRET"
-DISCORD_PERMISSIONS=18432
+DISCORD_BOT_TOKEN_ENV = "DISCORD_BOT_TOKEN"
+DISCORD_PERMISSIONS = 18432
+DISCORD_CHANNEL = 1156444485442617464
 
-POLL_TIME = 10
+POLL_TIME = 60
 ERROR_RETRY_TIME = 120
 
 
@@ -44,37 +48,28 @@ def twitch_session():
     return session
 
 
-def discord_session():
-    client_id = os.environ[DISCORD_CLIENT_ID_ENV]
-    client_secret = os.environ[DISCORD_CLIENT_SECRET_ENV]
-    data = {
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "grant_type": "client_credentials",
-        "scope": "identify",
-    }
-    headers = {"Content-Type": "application/x-www-form-urlencoded"}
-    response = requests.post(
-        "https://discord.com/api/v10/oauth2/token", data=data, headers=headers, auth=(client_id, client_secret))
-    response.raise_for_status()
+class DiscordClient(discord.Client):
+    async def setup_hook(self):
+        self.poll_twitch.start()
 
-    token = response.json()['access_token']
+    async def on_ready(self):
+        logging.info(f"Discord logged in as {self.user}")
 
-    session = requests.Session()
-    session.headers = {
-        "Authorization": f"Bearer {token}",
-        "Client-Id": client_id,
-    }
+    @discord.ext.tasks.loop(seconds=POLL_TIME)
+    async def poll_twitch(self):
+        await self.announce({"user_name": "me", "user_login": "unit327"})
 
-    return session
+    @poll_twitch.before_loop
+    async def wait(self):
+        await self.wait_until_ready()
 
+    async def announce(self, stream):
+        message = f"{stream['user_name']} is streaming Nethack!"
+        link = f"https://twitch.tv/{stream['user_login']}"
 
-def announce(stream, discord):
-    message = f"{stream['user_name']} is streaming Nethack!"
-    link = "https://twitch.tv/{stream['user_login']}"
-
-    logging.info(message)
-    # TODO post discord message
+        logging.info(message)
+        channel = self.get_channel(DISCORD_CHANNEL)
+        await channel.send(f"{message}\n{link}")
 
 
 def main():
@@ -82,8 +77,10 @@ def main():
     logging.info("Starting")
 
     announced_streamers = set()
-    twitch = twitch_session()
-    discord = discord_session()
+    #twitch = twitch_session()
+    discord_client = DiscordClient(intents=discord.Intents.default())
+    discord_client.run(os.environ[DISCORD_BOT_TOKEN_ENV])
+    return
     
     while True:
         try:
@@ -92,13 +89,13 @@ def main():
             response.raise_for_status()
         except requests.exceptions.HTTPError as e:
             logging.exception(e)
-            time.sleep(ERROR_RETRY_TIME)
+            asyncio.sleep(ERROR_RETRY_TIME)
             if e.status in {401, 403}:
                 twitch = twitch.session()  # too lazy to use refresh token timeout
                 continue
         except requests.exceptions.ConnectionError:
             logging.exception(e)
-            time.sleep(ERROR_RETRY_TIME)
+            asyncio.sleep(ERROR_RETRY_TIME)
             continue
 
         current_streamers = set()
@@ -106,17 +103,14 @@ def main():
             stream_key = (stream["user_login"], stream["started_at"])
             if stream_key not in announced_streamers:
                 try:
-                    announce(stream, discord)
+                    announce(stream, discord_client)
                     current_streamers.add(stream_key)
-                except requests.exceptions.HTTPError as e:
+                except Exception as e:
                     logging.exception(e)
-                    if e.status in {401, 403}:
-                        discord = discord.session()  # too lazy to use refresh token timeout
-                except requests.exceptions.ConnectionError:
-                    logging.exception(e)
+                    #discord_client = discord_session()  # too lazy to use refresh token timeout
 
         announced_streamers = current_streamers
-        time.sleep(POLL_TIME)
+        asyncio.sleep(POLL_TIME)
 
 
 if __name__ == "__main__":
