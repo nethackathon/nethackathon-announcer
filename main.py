@@ -74,7 +74,7 @@ class DiscordClient(discord.Client):
         await asyncio.gather(self.wait_until_ready(), self.twitch_auth())
 
     async def announce(self, streams):
-        channel_id = os.environ[DISCORD_CHANNEL_ENV]
+        channel_id = int(os.environ[DISCORD_CHANNEL_ENV])
         channel = self.get_channel(channel_id)
         if not channel:
             logging.error(f"Couldn't get discord channel {channel_id}")
