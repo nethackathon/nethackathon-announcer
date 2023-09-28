@@ -2,6 +2,7 @@
 
 import asyncio
 import aiohttp
+import datetime
 import discord
 import discord.ext.tasks
 import logging
@@ -20,13 +21,14 @@ DISCORD_BOT_TOKEN_ENV = "DISCORD_BOT_TOKEN"
 DISCORD_CHANNEL_ENV = "DISCORD_CHANNEL"
 
 POLL_TIME = 120
+STREAM_EXPIRY = datetime.timedelta(minutes=30)
 
 
 class DiscordClient(discord.Client):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.announced_streams = set()
+        self.announced_streams = dict()
 
     async def setup_hook(self):
         self.poll_twitch.start()
@@ -80,11 +82,12 @@ class DiscordClient(discord.Client):
             logging.error(f"Couldn't get discord channel {channel_id}")
             return
 
-        current_streams = set()
+        current_streams = dict()
         for st in streams:
-            stream_key = (st["user_login"], st["started_at"])
-            current_streams.add(stream_key)
-            if stream_key in self.announced_streams:
+            streamer = st["user_login"]
+            started_at = datetime.datetime.fromisoformat(st["started_at"])
+            if streamer in self.announced_streams:
+                current_streams[streamer] = started_at
                 continue
 
             message = f"{st['user_name']} is streaming Nethack!"
@@ -92,11 +95,18 @@ class DiscordClient(discord.Client):
             logging.info(message)
             try:
                 await channel.send(f"{message}\n{link}")
+                current_streams[streamer] = started_at
             except Exception as e:
                 logging.exception(e)
-                current_streams.remove(stream_key)
 
-        self.announced_streams = current_streams
+        # prune old streams
+        self.announced_streams = {
+            s: dt for s, dt in self.announced_streams.items()
+            if datetime.datetime.now(datetime.timezone.utc) - dt > STREAM_EXPIRY
+        }
+        # but add back in ones that are still going
+        self.announced_streams.update(current_streams)
+        # this avoids spam if people stop and restart the stream within STREAM_EXPIRY
 
 
 def main():
