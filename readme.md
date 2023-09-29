@@ -5,7 +5,7 @@ A discord bot which announces when people go live streaming nethack on twitch
 To run the backend:
 
 1. Put the secret credentials in a file called `.env`
-2. `docker run --name nethack-announcer --detach --restart unless-stopped --env-file .env registry.gitlab.com/danielkinsman/nethack-announcer:latest`
+2. `docker run --name nethack-announcer --detach --restart unless-stopped --env-file .env registry.gitlab.com/danielkinsman/nethack-announcer:main`
 
 You don't need to download or clone the repo.
 
