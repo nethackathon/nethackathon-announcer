@@ -110,7 +110,7 @@ class DiscordClient(discord.Client):
 
 
 def main():
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s:%(name)s:%(levelname)s %(message)")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s:%(name)s:%(levelname)s %(message)s")
     logging.info("Starting")
 
     intents = discord.Intents(guilds=True)
