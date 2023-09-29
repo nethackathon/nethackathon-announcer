@@ -21,7 +21,7 @@ DISCORD_BOT_TOKEN_ENV = "DISCORD_BOT_TOKEN"
 DISCORD_CHANNEL_ENV = "DISCORD_CHANNEL"
 
 POLL_TIME = 120
-STREAM_EXPIRY = datetime.timedelta(minutes=30)
+STREAM_EXPIRY = datetime.timedelta(minutes=60)
 
 
 class DiscordClient(discord.Client):
@@ -81,28 +81,28 @@ class DiscordClient(discord.Client):
         if not channel:
             logging.error(f"Couldn't get discord channel {channel_id}")
             return
-
+    
         current_streams = dict()
         for st in streams:
             streamer = st["user_login"]
-            started_at = datetime.datetime.fromisoformat(st["started_at"])
             if streamer in self.announced_streams:
-                current_streams[streamer] = started_at
+                current_streams[streamer] = self.announced_streams[streamer]
+                logging.debug(f"{streamer} already announced")
                 continue
-
+    
             message = f"{st['user_name']} is streaming Nethack!"
             link = f"https://twitch.tv/{st['user_login']}"
             logging.info(message)
             try:
                 await channel.send(f"{message}\n{link}")
-                current_streams[streamer] = started_at
+                current_streams[streamer] = datetime.datetime.now()
             except Exception as e:
                 logging.exception(e)
-
+    
         # prune old streams
         self.announced_streams = {
             s: dt for s, dt in self.announced_streams.items()
-            if datetime.datetime.now(datetime.timezone.utc) - dt > STREAM_EXPIRY
+            if datetime.datetime.now() - dt < STREAM_EXPIRY
         }
         # but add back in ones that are still going
         self.announced_streams.update(current_streams)
@@ -110,7 +110,7 @@ class DiscordClient(discord.Client):
 
 
 def main():
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s:%(name)s:%(levelname)s %(message)")
     logging.info("Starting")
 
     intents = discord.Intents(guilds=True)
