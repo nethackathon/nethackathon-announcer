@@ -90,7 +90,10 @@ class DiscordClient(discord.Client):
                 logging.debug(f"{streamer} already announced")
                 continue
     
-            message = f"{st['user_name']} is streaming Nethack!"
+            message = f"{st['user_name']} is streaming {st.get('game_name', 'Nethack')}!"
+            title = st.get("title")
+            if title:
+                message += f"\n{title}"
             link = f"https://twitch.tv/{st['user_login']}"
             logging.info(message)
             try:
