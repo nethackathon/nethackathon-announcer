@@ -11,16 +11,16 @@ import os
 
 TWITCH_CLIENT_ID_ENV = "TWITCH_CLIENT_ID"
 TWITCH_CLIENT_SECRET_ENV = "TWITCH_CLIENT_SECRET"
-NETHACK_TWITCH_GAME_ID = 130
-#NETHACK_TWITCH_GAME_ID = 516575 # valorant for testing
+TWITCH_GAME_ID = int(os.getenv("TWITCH_GAME_ID", "130"))
+#TWITCH_GAME_ID = 516575 # valorant for testing
 # get again with this:
-#   response = twitch.get("https://api.twitch.tv/helix/games?name=nethack&name=nethack-1987")
-TWITCH_QUERY = f"https://api.twitch.tv/helix/streams?game_id={NETHACK_TWITCH_GAME_ID}&type=live"
+#   https://api.twitch.tv/helix/games?name=nethack&name=nethack-1987
+TWITCH_QUERY = f"https://api.twitch.tv/helix/streams?game_id={TWITCH_GAME_ID}&type=live"
 
 DISCORD_BOT_TOKEN_ENV = "DISCORD_BOT_TOKEN"
 DISCORD_CHANNEL_ENV = "DISCORD_CHANNEL"
 
-POLL_TIME = 120
+POLL_TIME = int(os.getenv("TWITCH_POLL_TIME", "120"))
 STREAM_EXPIRY = datetime.timedelta(minutes=60)
 
 
