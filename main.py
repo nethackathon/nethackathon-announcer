@@ -6,6 +6,7 @@ import datetime
 import discord
 import discord.ext.tasks
 import logging
+from mastodon import Mastodon
 import os
 
 
@@ -19,6 +20,10 @@ TWITCH_QUERY = f"https://api.twitch.tv/helix/streams?game_id={TWITCH_GAME_ID}&ty
 
 DISCORD_BOT_TOKEN_ENV = "DISCORD_BOT_TOKEN"
 DISCORD_CHANNEL_ENV = "DISCORD_CHANNEL"
+
+MASTODON_URL_ENV = "MASTODON_URL"
+MASTODON_ACCESS_TOKEN_ENV = "MASTODON_ACCESS_TOKEN"
+MASTODON_SCOPES = tuple(["write:statuses"])
 
 POLL_TIME = int(os.getenv("TWITCH_POLL_TIME", "120"))
 STREAM_EXPIRY = datetime.timedelta(minutes=60)
@@ -115,6 +120,13 @@ class DiscordClient(discord.Client):
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s:%(name)s:%(levelname)s %(message)s")
     logging.info("Starting")
+
+    mastodon = Mastodon(
+        api_base_url=os.getenv(MASTODON_URL_ENV, "https://mastodon.social"),
+        access_token=os.environ[MASTODON_ACCESS_TOKEN_ENV],
+    )
+    mastodon.status_post("hello world")
+    return
 
     intents = discord.Intents(guilds=True)
     discord_client = DiscordClient(intents=intents)
