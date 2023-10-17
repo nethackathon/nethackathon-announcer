@@ -34,6 +34,7 @@ class DiscordClient(discord.Client):
         super().__init__(*args, **kwargs)
 
         self.announced_streams = dict()
+        self.mastodon = kwargs.get("mastodon")
 
     async def setup_hook(self):
         self.poll_twitch.start()
@@ -101,8 +102,13 @@ class DiscordClient(discord.Client):
                 message += f"\n{title}"
             link = f"https://twitch.tv/{st['user_login']}"
             logging.info(message)
+            message += f"\n{link}"
             try:
-                await channel.send(f"{message}\n{link}")
+                await channel.send(message)
+                if self.mastodon:
+                    self.mastodon.status_post(message)  # synchronous, sad
+                    # may get discord spam if mastodon throws errors often
+
                 current_streams[streamer] = datetime.datetime.now()
             except Exception as e:
                 logging.exception(e)
@@ -121,15 +127,18 @@ def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s:%(name)s:%(levelname)s %(message)s")
     logging.info("Starting")
 
-    mastodon = Mastodon(
-        api_base_url=os.getenv(MASTODON_URL_ENV, "https://mastodon.social"),
-        access_token=os.environ[MASTODON_ACCESS_TOKEN_ENV],
-    )
-    mastodon.status_post("hello world")
-    return
+    try:
+        mastodon = Mastodon(
+            api_base_url=os.getenv(MASTODON_URL_ENV, "https://mastodon.social"),
+            access_token=os.environ[MASTODON_ACCESS_TOKEN_ENV],
+        )
+    except Exception as e:
+        logging.exception(e)
+        logging.error("Could not log in to mastodon, starting without it")
+        mastodon = None
 
     intents = discord.Intents(guilds=True)
-    discord_client = DiscordClient(intents=intents)
+    discord_client = DiscordClient(intents=intents, mastodon=mastodon)
     discord_client.run(os.environ[DISCORD_BOT_TOKEN_ENV])
 
 
