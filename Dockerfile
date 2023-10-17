@@ -4,7 +4,7 @@ label org.opencontainers.image.authors="danielkinsman@riseup.net"
 label org.opencontainers.licenses="MIT"
 label org.opencontainers.image.source="https://gitlab.com/DanielKinsman/nethack-announcer"
 label org.opencontainers.image.url="https://gitlab.com/DanielKinsman/nethack-announcer"
-label org.opencontainers.version="0.0.1"
+label org.opencontainers.version="0.1.0"
 
 run apk add --no-cache py3-virtualenv
 
