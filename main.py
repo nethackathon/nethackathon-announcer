@@ -24,6 +24,7 @@ DISCORD_CHANNEL_ENV = "DISCORD_CHANNEL"
 MASTODON_URL_ENV = "MASTODON_URL"
 MASTODON_ACCESS_TOKEN_ENV = "MASTODON_ACCESS_TOKEN"
 MASTODON_SCOPES = tuple(["write:statuses"])
+MASTODON_HASHTAGS = "#NetHack #RogueLike"
 
 POLL_TIME = int(os.getenv("TWITCH_POLL_TIME", "120"))
 STREAM_EXPIRY = datetime.timedelta(minutes=60)
@@ -102,11 +103,10 @@ class DiscordClient(discord.Client):
                 message += f"\n{title}"
             link = f"https://twitch.tv/{st['user_login']}"
             logging.info(message)
-            message += f"\n{link}"
             try:
-                await channel.send(message)
+                await channel.send(f"{message}\n{link}")
                 if self.mastodon:
-                    self.mastodon.status_post(message)  # synchronous, sad
+                    self.mastodon.status_post(f"{message} {MASTODON_HASHTAGS}\n{link}")  # synchronous, sad
                     # may get discord spam if mastodon throws errors often
 
                 current_streams[streamer] = datetime.datetime.now()
