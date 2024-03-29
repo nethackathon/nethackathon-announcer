@@ -26,6 +26,8 @@ MASTODON_ACCESS_TOKEN_ENV = "MASTODON_ACCESS_TOKEN"
 MASTODON_SCOPES = tuple(["write:statuses"])
 MASTODON_HASHTAGS = "#NetHack #RogueLike"
 
+NETHACKATHON_API_EVENT = "https://api.nethackathon.org/event/current"
+
 POLL_TIME = int(os.getenv("TWITCH_POLL_TIME", "120"))
 STREAM_EXPIRY = datetime.timedelta(minutes=60)
 
@@ -88,7 +90,9 @@ class DiscordClient(discord.Client):
         if not channel:
             logging.error(f"Couldn't get discord channel {channel_id}")
             return
-    
+
+        nethackathon_live = await is_nethackathon_live()
+
         current_streams = dict()
         for st in streams:
             streamer = st["user_login"]
@@ -96,17 +100,23 @@ class DiscordClient(discord.Client):
                 current_streams[streamer] = self.announced_streams[streamer]
                 logging.debug(f"{streamer} already announced")
                 continue
-    
+
             message = f"{st['user_name']} is streaming {st.get('game_name', 'Nethack')}!"
+            if nethackathon_live:
+                message = f"{st['user_name']} is streaming for Nethackathon! https://nethackathon.org"
+
             title = st.get("title")
             if title:
                 message += f"\n{title}"
+
             link = f"https://twitch.tv/{st['user_login']}"
             logging.info(message)
             try:
                 await channel.send(f"{message}\n{link}")
                 if self.mastodon:
-                    self.mastodon.status_post(f"{message} {MASTODON_HASHTAGS}\n{link}")  # synchronous, sad
+                    hashtags = MASTODON_HASHTAGS
+                    hashtags += " #Nethackathon" if nethackathon_live else ""
+                    self.mastodon.status_post(f"{message} {hashtags}\n{link}")  # synchronous, sad
                     # may get discord spam if mastodon throws errors often
 
                 current_streams[streamer] = datetime.datetime.now()
@@ -121,6 +131,25 @@ class DiscordClient(discord.Client):
         # but add back in ones that are still going
         self.announced_streams.update(current_streams)
         # this avoids spam if people stop and restart the stream within STREAM_EXPIRY
+
+
+async def is_nethackathon_live() -> bool:
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(NETHACKATHON_API_EVENT) as response:
+                if 200 <= response.status <= 299:
+                    js = await response.json()
+                    logging.info(js)
+                    start = datetime.datetime.fromisoformat(js["currentEvent"]["event_start"])
+                    end = datetime.datetime.fromisoformat(js["currentEvent"]["event_end"])
+                    return start <= datetime.datetime.now(tz=datetime.timezone.utc) <= end
+
+                logging.error(f"Got {response.status} from nethackathon")
+    except Exception as e:
+        logging.error("Failed to determine if nethackathon is live")
+        logging.exception(e)
+
+    return False
 
 
 def main():
