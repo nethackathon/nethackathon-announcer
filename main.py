@@ -139,7 +139,6 @@ async def is_nethackathon_live() -> bool:
             async with session.get(NETHACKATHON_API_EVENT) as response:
                 if 200 <= response.status <= 299:
                     js = await response.json()
-                    logging.info(js)
                     start = datetime.datetime.fromisoformat(js["currentEvent"]["event_start"])
                     end = datetime.datetime.fromisoformat(js["currentEvent"]["event_end"])
                     return start <= datetime.datetime.now(tz=datetime.timezone.utc) <= end
