@@ -5,6 +5,7 @@ import aiohttp
 import datetime
 import discord
 import discord.ext.tasks
+import itertools
 import logging
 from mastodon import Mastodon
 import os
@@ -27,6 +28,9 @@ MASTODON_SCOPES = tuple(["write:statuses"])
 MASTODON_HASHTAGS = "#NetHack #RogueLike"
 
 NETHACKATHON_API_EVENT = "https://api.nethackathon.org/event/current"
+NETHACKATHON_API_ENDED_GAMES = "https://api.nethackathon.org/endedGames"
+NETHACKATHON_API_LIVELOG = "https://api.nethackathon.org/livelog"
+NETHACKATHON_API_STREAMERS = "https://api.nethackathon.org/streamers"
 
 POLL_TIME = int(os.getenv("TWITCH_POLL_TIME", "120"))
 STREAM_EXPIRY = datetime.timedelta(minutes=60)
@@ -38,9 +42,11 @@ class DiscordClient(discord.Client):
 
         self.announced_streams = dict()
         self.mastodon = kwargs.get("mastodon")
+        self.max_log_time = 0
 
     async def setup_hook(self):
         self.poll_twitch.start()
+        self.poll_nethackathon.start()
 
     async def on_ready(self):
         logging.info(f"Discord logged in as {self.user}")
@@ -73,7 +79,7 @@ class DiscordClient(discord.Client):
             async with session.get(TWITCH_QUERY) as response:
                 if 200 <= response.status <= 299:
                     js = await response.json()
-                    await self.announce(js["data"])
+                    await self.announce_streams(js["data"])
                 elif response.status in {401, 403}:
                     logging.error(f"Got {response.status} from twitch, redoing auth")
                     await self.twitch_auth()
@@ -84,15 +90,39 @@ class DiscordClient(discord.Client):
     async def wait(self):
         await asyncio.gather(self.wait_until_ready(), self.twitch_auth())
 
-    async def announce(self, streams):
-        channel_id = int(os.environ[DISCORD_CHANNEL_ENV])
-        channel = self.get_channel(channel_id)
-        if not channel:
-            logging.error(f"Couldn't get discord channel {channel_id}")
-            return
+    @discord.ext.tasks.loop(seconds=POLL_TIME)
+    async def poll_nethackathon(self):
+        try:
+            if not await is_nethackathon_live():
+                return
 
-        nethackathon_live = await is_nethackathon_live()
+            result = await asyncio.gather(fetch_json(NETHACKATHON_API_LIVELOG), fetch_json(NETHACKATHON_API_ENDED_GAMES))
+            messages = []
+            for m in sorted(itertools.chain(*result), key=lambda x: x.get("time", 0)):
+                if m.get("type", 0) == 16384 or m["message"].endswith("on T:1"):
+                    messages.append(m)
 
+            if not messages:
+                return
+
+            max_time = max(m.get("time", 0) for m in messages)
+            if max_time <= self.max_log_time:
+                return
+
+            self.max_log_time = max_time
+
+            msg = "\n".join(m["message"] for m in messages)
+            await self.announce_discord(msg)
+            self.announce_mastodon(f"{msg}\n#Nethackathon https://nethackathon.org")
+        except Exception as e:
+            logging.error("Couldn't announce nethackathon logs")
+            logging.excepton(e)
+
+    @poll_nethackathon.before_loop
+    async def wait_nethackathon(self):
+        await self.wait_until_ready()
+
+    async def announce_streams(self, streams):
         current_streams = dict()
         for st in streams:
             streamer = st["user_login"]
@@ -101,8 +131,11 @@ class DiscordClient(discord.Client):
                 logging.debug(f"{streamer} already announced")
                 continue
 
+            results = await asyncio.gather(is_nethackathon_live(), is_nethackathon_participant(streamer))
+            nethackathon_streamer = all(results)
+
             message = f"{st['user_name']} is streaming {st.get('game_name', 'Nethack')}!"
-            if nethackathon_live:
+            if nethackathon_streamer:
                 message = f"{st['user_name']} is streaming for Nethackathon! https://nethackathon.org"
 
             title = st.get("title")
@@ -112,12 +145,11 @@ class DiscordClient(discord.Client):
             link = f"https://twitch.tv/{st['user_login']}"
             logging.info(message)
             try:
-                await channel.send(f"{message}\n{link}")
-                if self.mastodon:
-                    hashtags = MASTODON_HASHTAGS
-                    hashtags += " #Nethackathon" if nethackathon_live else ""
-                    self.mastodon.status_post(f"{message} {hashtags}\n{link}")  # synchronous, sad
-                    # may get discord spam if mastodon throws errors often
+                await self.announce_discord(f"{message}\n{link}")
+                hashtags = MASTODON_HASHTAGS
+                hashtags += " #Nethackathon" if nethackathon_streamer else ""
+                self.announce_mastodon(f"{message} {hashtags}\n{link}")
+                # may get discord spam if mastodon throws errors often
 
                 current_streams[streamer] = datetime.datetime.now()
             except Exception as e:
@@ -132,23 +164,57 @@ class DiscordClient(discord.Client):
         self.announced_streams.update(current_streams)
         # this avoids spam if people stop and restart the stream within STREAM_EXPIRY
 
+    async def announce_discord(self, message):
+        channel_id = int(os.environ[DISCORD_CHANNEL_ENV])
+        channel = self.get_channel(channel_id)
+        if not channel:
+            logging.error(f"Couldn't get discord channel {channel_id}")
+            return
+
+        await channel.send(message)
+
+    def announce_mastodon(self, message):
+        if not self.mastodon:
+            return
+
+        self.mastodon.status_post(message)  # synchronous, sad
+
 
 async def is_nethackathon_live() -> bool:
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(NETHACKATHON_API_EVENT) as response:
-                if 200 <= response.status <= 299:
-                    js = await response.json()
-                    start = datetime.datetime.fromisoformat(js["currentEvent"]["event_start"])
-                    end = datetime.datetime.fromisoformat(js["currentEvent"]["event_end"])
-                    return start <= datetime.datetime.now(tz=datetime.timezone.utc) <= end
-
-                logging.error(f"Got {response.status} from nethackathon")
+        js = await fetch_json(NETHACKATHON_API_EVENT)
+        start = datetime.datetime.fromisoformat(js["currentEvent"]["event_start"])
+        end = datetime.datetime.fromisoformat(js["currentEvent"]["event_end"])
+        return start <= datetime.datetime.now(tz=datetime.timezone.utc) <= end
     except Exception as e:
         logging.error("Failed to determine if nethackathon is live")
         logging.exception(e)
 
     return False
+
+
+async def is_nethackathon_participant(streamer: str) -> bool:
+    try:
+        js = await fetch_json(NETHACKATHON_API_STREAMERS)
+        return any(streamer.lower() == x.get("username", "").lower() for x in js["streamers"])
+    except Exception as e:
+        logging.error("Failed to determine if streamer is participant")
+        logging.exception(e)
+
+    return False
+
+
+async def fetch_json(url: str):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if 200 <= response.status <= 299:
+                    return await response.json()
+
+                logging.error(f"Got {response.status} from {url}")
+    except Exception as e:
+        logging.error(f"Failed to fetch {url}")
+        raise
 
 
 def main():
