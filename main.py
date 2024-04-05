@@ -42,7 +42,7 @@ class DiscordClient(discord.Client):
 
         self.announced_streams = dict()
         self.mastodon = kwargs.get("mastodon")
-        self.max_log_time = 0
+        self.max_log_time = 1712323786  # hax
 
     async def setup_hook(self):
         self.poll_twitch.start()
@@ -99,17 +99,16 @@ class DiscordClient(discord.Client):
             result = await asyncio.gather(fetch_json(NETHACKATHON_API_LIVELOG), fetch_json(NETHACKATHON_API_ENDED_GAMES))
             messages = []
             for m in sorted(itertools.chain(*result), key=lambda x: x.get("time", 0)):
+                if m.get("time", 0) <= self.max_log_time:
+                    continue
+
                 if m.get("type", 0) == 16384 or m["message"].endswith("on T:1"):
                     messages.append(m)
 
             if not messages:
                 return
 
-            max_time = max(m.get("time", 0) for m in messages)
-            if max_time <= self.max_log_time:
-                return
-
-            self.max_log_time = max_time
+            self.max_log_time = max(m.get("time", 0) for m in messages)
 
             msg = "\n".join(m["message"] for m in messages)
             await self.announce_discord(msg)
