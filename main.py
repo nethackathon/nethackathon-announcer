@@ -42,7 +42,7 @@ class DiscordClient(discord.Client):
 
         self.announced_streams = dict()
         self.mastodon = kwargs.get("mastodon")
-        self.max_log_time = 1712323786  # hax
+        self.max_log_time = -1
 
     async def setup_hook(self):
         self.poll_twitch.start()
@@ -108,6 +108,11 @@ class DiscordClient(discord.Client):
             if not messages:
                 return
 
+            # Suppress announcment of the first messages when we are restarted
+            if self.max_log_time < 0:
+                self.max_log_time = max(m.get("time", 0) for m in messages)
+                return
+
             self.max_log_time = max(m.get("time", 0) for m in messages)
 
             msg = "\n".join(m["message"] for m in messages)
@@ -115,7 +120,7 @@ class DiscordClient(discord.Client):
             self.announce_mastodon(f"{msg}\n#Nethackathon https://nethackathon.org")
         except Exception as e:
             logging.error("Couldn't announce nethackathon logs")
-            logging.excepton(e)
+            logging.exception(e)
 
     @poll_nethackathon.before_loop
     async def wait_nethackathon(self):
