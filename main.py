@@ -188,7 +188,9 @@ async def is_nethackathon_live() -> bool:
     try:
         js = await fetch_json(NETHACKATHON_API_EVENT)
         start = datetime.datetime.fromisoformat(js["currentEvent"]["event_start"])
+        start -= datetime.timedelta(hours=2)  # people might start early
         end = datetime.datetime.fromisoformat(js["currentEvent"]["event_end"])
+        end += datetime.timedelta(hours=4)  # people might finish late
         return start <= datetime.datetime.now(tz=datetime.timezone.utc) <= end
     except Exception as e:
         logging.error("Failed to determine if nethackathon is live")
