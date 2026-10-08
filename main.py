@@ -14,7 +14,7 @@ import os
 TWITCH_CLIENT_ID_ENV = "TWITCH_CLIENT_ID"
 TWITCH_CLIENT_SECRET_ENV = "TWITCH_CLIENT_SECRET"
 TWITCH_GAME_ID = int(os.getenv("TWITCH_GAME_ID", "130"))
-#TWITCH_GAME_ID = 516575 # valorant for testing
+#TWITCH_GAME_ID = 32742  # kerbal space program for testing
 # get again with this:
 #   https://api.twitch.tv/helix/games?name=nethack&name=nethack-1987
 TWITCH_QUERY = f"https://api.twitch.tv/helix/streams?game_id={TWITCH_GAME_ID}&type=live"
@@ -132,6 +132,7 @@ class DiscordClient(discord.Client):
         for st in streams:
             streamer = st["user_login"]
             if streamer in ban_list:
+                logging.info(f"{streamer} in ban list, ignoring")
                 continue
 
             if streamer in self.announced_streams:
@@ -236,6 +237,7 @@ def main():
             api_base_url=os.getenv(MASTODON_URL_ENV, "https://mastodon.social"),
             access_token=os.environ[MASTODON_ACCESS_TOKEN_ENV],
         )
+        logging.info("Logged in to mastodon")
     except Exception as e:
         logging.exception(e)
         logging.error("Could not log in to mastodon, starting without it")
