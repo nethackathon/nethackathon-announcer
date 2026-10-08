@@ -16,6 +16,7 @@ The env vars file should look like this:
     DISCORD_BOT_TOKEN=alsosupersecret
     DISCORD_CHANNEL=12345
     MASTODON_ACCESS_TOKEN=alsoalsosupersecret
+    BAN_LIST=bashandplay,dociai
 
 To add the bot to your discord server click this link:
 

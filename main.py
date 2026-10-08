@@ -128,8 +128,12 @@ class DiscordClient(discord.Client):
 
     async def announce_streams(self, streams):
         current_streams = dict()
+        ban_list = frozenset(os.getenv("BAN_LIST", "").split(","))
         for st in streams:
             streamer = st["user_login"]
+            if streamer in ban_list:
+                continue
+
             if streamer in self.announced_streams:
                 current_streams[streamer] = self.announced_streams[streamer]
                 logging.debug(f"{streamer} already announced")
