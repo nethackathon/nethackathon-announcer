@@ -48,6 +48,10 @@ Then:
 
 Looks like access token is valid forever, at least for now https://github.com/mastodon/mastodon/issues/26838
 
+## Ban List
+
+If you want to skip announcements for certain channels, add them the the env var `BAN_LIST` in comma separated format, e.g. `BAN_LIST="dociai,bashandplay"`. You may need to restart the container unless there is some fancy way of injecting env vars into a running container that I don't know about.
+
 ## Improvments and TODO
 
 * use github based CI and container registry under the nethackathon github account, rather than Daniel's gitlab
